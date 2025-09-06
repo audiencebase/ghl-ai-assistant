@@ -120,8 +120,8 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Chat error:', error);
-    return res.status(500).json({ 
-      response: `Error: ${error.message}. Please check your environment variables and try again.`
+    return res.status(200).json({ 
+      response: `Sorry, I encountered an error: ${error.message}. This is likely due to missing GEMINI_API_KEY environment variable. Please add it in Vercel settings.`
     });
   }
 }
