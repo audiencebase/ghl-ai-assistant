@@ -88,58 +88,40 @@ export default async function handler(req, res) {
   try {
     const { message, locationId, userId, contactId } = req.body;
 
-    if (!message || !locationId) {
-      return res.status(400).json({ error: 'Message and locationId are required' });
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Initialize Gemini
+    // Check if API keys are configured
+    if (!process.env.GEMINI_API_KEY) {
+      return res.json({ 
+        response: "⚠️ Setup needed: Please add your GEMINI_API_KEY to Vercel environment variables.\n\n1. Go to Vercel Dashboard → Settings → Environment Variables\n2. Add GEMINI_API_KEY with your Google AI Studio key\n3. Redeploy the application" 
+      });
+    }
+
+    // Initialize Gemini without GHL functions for now
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
-      tools: [{ functionDeclarations: [ghlFunctions] }]
+      model: 'gemini-1.5-flash'
     });
 
-    const chat = model.startChat();
-    const result = await chat.sendMessage(`Context: User is in GHL location ${locationId}${contactId ? `, viewing contact ${contactId}` : ''}. User message: ${message}`);
-
-    const response = result.response;
+    const contextMessage = `You are a helpful AI assistant for GoHighLevel users. 
+    ${locationId ? `User is in GHL location: ${locationId}` : ''}
+    ${contactId ? `Currently viewing contact: ${contactId}` : ''}
+    ${userId ? `User ID: ${userId}` : ''}
     
-    // Handle function calls
-    if (response.functionCalls()) {
-      const functionCall = response.functionCalls()[0];
-      const { action, locationId: funcLocationId, data } = functionCall.args;
-      
-      try {
-        const apiResult = await callGHLAPI(action, funcLocationId || locationId, data);
-        
-        // Send function result back to Gemini
-        const functionResponse = {
-          functionResponse: {
-            name: functionCall.name,
-            response: { data: apiResult.data }
-          }
-        };
-        
-        const finalResult = await chat.sendMessage([functionResponse]);
-        return res.json({ 
-          response: finalResult.response.text(),
-          functionCalled: true 
-        });
-        
-      } catch (apiError) {
-        return res.json({ 
-          response: `Sorry, I encountered an error accessing your GHL data: ${apiError.message}`,
-          error: true 
-        });
-      }
-    }
+    Note: Full GHL integration requires OAuth setup. For now, provide helpful general advice about GoHighLevel.
+    
+    User message: ${message}`;
+
+    const result = await model.generateContent(contextMessage);
+    const response = result.response;
 
     return res.json({ response: response.text() });
 
   } catch (error) {
     console.error('Chat error:', error);
     return res.status(500).json({ 
-      error: 'Internal server error', 
-      details: error.message 
+      response: `Error: ${error.message}. Please check your environment variables and try again.`
     });
   }
 }
